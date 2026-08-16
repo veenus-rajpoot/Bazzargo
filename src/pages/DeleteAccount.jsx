@@ -111,7 +111,7 @@ export default function DeleteAccount() {
     setScheduledDate(scheduled)
 
     try {
-      // 1. Try to save deletion request to Supabase 'deletion_requests' table
+      // 1. Save deletion request to Supabase 'deletion_requests' table
       const { error: dbError } = await supabase.from('deletion_requests').insert([
         {
           user_id: session.user.id,
@@ -124,11 +124,17 @@ export default function DeleteAccount() {
         },
       ])
 
+      if (dbError) {
+        // eslint-disable-next-line no-console
+        console.error('Supabase DB Insert Error:', dbError)
+        throw new Error(dbError.message || dbError.details || 'Failed to save deletion request in Supabase.')
+      }
+
       // 2. Try Edge function if available
       try {
         await requestAccountDeletion()
       } catch (_fnErr) {
-        // Edge function may not be deployed, which is expected if using DB table directly
+        // Edge function call optional fallback
       }
 
       setConfirmOpen(false)
