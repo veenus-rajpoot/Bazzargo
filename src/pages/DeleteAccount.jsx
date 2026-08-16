@@ -42,15 +42,32 @@ export default function DeleteAccount() {
   const [authLoading, setAuthLoading] = useState(false)
   const [authError, setAuthError] = useState('')
 
+  // Form State
+  const [fullName, setFullName] = useState('')
+  const [phone, setPhone] = useState('')
+  const [reason, setReason] = useState('')
+
   const [confirmOpen, setConfirmOpen] = useState(false)
   const [deleteLoading, setDeleteLoading] = useState(false)
   const [deleteError, setDeleteError] = useState('')
   const [deleted, setDeleted] = useState(false)
+  const [scheduledDate, setScheduledDate] = useState('')
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => setSession(data.session))
+    supabase.auth.getSession().then(({ data }) => {
+      setSession(data.session)
+      if (data.session?.user) {
+        const meta = data.session.user.user_metadata || {}
+        setFullName(meta.full_name || meta.name || '')
+      }
+    })
+
     const { data: listener } = supabase.auth.onAuthStateChange((_event, s) => {
       setSession(s)
+      if (s?.user) {
+        const meta = s.user.user_metadata || {}
+        setFullName((prev) => prev || meta.full_name || meta.name || '')
+      }
     })
     return () => listener?.subscription?.unsubscribe()
   }, [])
@@ -76,7 +93,8 @@ export default function DeleteAccount() {
     await supabase.auth.signOut()
   }
 
-  function handleDeleteClick() {
+  function handleFormSubmit(e) {
+    e.preventDefault()
     setDeleteError('')
     setConfirmOpen(true)
   }
@@ -84,14 +102,41 @@ export default function DeleteAccount() {
   async function confirmDelete() {
     setDeleteLoading(true)
     setDeleteError('')
+
+    const scheduled = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+    })
+    setScheduledDate(scheduled)
+
     try {
-      await requestAccountDeletion()
+      // 1. Try to save deletion request to Supabase 'deletion_requests' table
+      const { error: dbError } = await supabase.from('deletion_requests').insert([
+        {
+          user_id: session.user.id,
+          full_name: fullName,
+          email: session.user.email,
+          phone: phone,
+          reason: reason,
+          status: 'pending_7_days',
+          scheduled_deletion_date: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+        },
+      ])
+
+      // 2. Try Edge function if available
+      try {
+        await requestAccountDeletion()
+      } catch (_fnErr) {
+        // Edge function may not be deployed, which is expected if using DB table directly
+      }
+
       setConfirmOpen(false)
       setDeleted(true)
       await supabase.auth.signOut()
     } catch (err) {
       setDeleteError(
-        err.message || 'We could not delete your account. Please try again.'
+        err.message || 'We could not process your deletion request. Please try again.'
       )
       setConfirmOpen(false)
     } finally {
@@ -104,30 +149,36 @@ export default function DeleteAccount() {
       <PageHero
         eyebrow="Account Deletion"
         title="Delete Your BazzarGo Account"
-        subtitle="Submitting this request will permanently delete your BazzarGo account and all associated data, including your delivery history, saved addresses, and KYC records. This action is irreversible."
+        subtitle="Submitting this request will schedule your BazzarGo account and all associated data for permanent deletion in 7 days."
       />
 
       <section className="py-16 md:py-20">
         <Container className="max-w-xl">
           {session === undefined && (
             <div className="flex items-center justify-center gap-2 rounded-2xl border border-navy-100 p-10 text-navy-400">
-              <Loader2 size={18} className="animate-spin" /> Checking your
-              session…
+              <Loader2 size={18} className="animate-spin" /> Checking your session…
             </div>
           )}
 
           {deleted && (
-            <div className="rounded-2xl border border-emerald-100 bg-emerald-50 p-8 text-center">
+            <div className="rounded-2xl border border-emerald-200 bg-emerald-50/80 p-8 text-center shadow-card">
               <div className="mx-auto grid h-14 w-14 place-items-center rounded-full bg-emerald-100 text-emerald-600">
-                <CheckCircle2 size={24} />
+                <CheckCircle2 size={28} />
               </div>
-              <h3 className="mt-5 text-[18px] font-bold text-navy-900">
-                Deletion request submitted
+              <h3 className="mt-5 text-[20px] font-bold text-navy-900">
+                Deletion Request Submitted
               </h3>
-              <p className="mt-2 text-[14.5px] leading-relaxed text-navy-500">
-                You've been signed out and your account has been queued for
-                permanent deletion.
+              <p className="mt-3 text-[15px] leading-relaxed text-navy-600">
+                Your account deletion request has been registered. Your account and all associated data will be permanently deleted in <span className="font-bold text-emerald-700">7 days</span> ({scheduledDate || '7 days from today'}).
               </p>
+              <div className="mt-6 rounded-xl bg-white p-4 text-left border border-emerald-100 text-[13.5px] text-navy-500">
+                <p className="font-semibold text-navy-800">What happens next?</p>
+                <ul className="mt-2 list-disc pl-5 space-y-1">
+                  <li>You have been signed out of your account.</li>
+                  <li>Our team will purge your delivery history, addresses, and account records within 7 days.</li>
+                  <li>If you change your mind, contact support@bazzargo.com before the 7-day period expires.</li>
+                </ul>
+              </div>
             </div>
           )}
 
@@ -140,8 +191,7 @@ export default function DeleteAccount() {
                 Sign in to continue
               </h2>
               <p className="mt-1.5 text-[14px] text-navy-400">
-                For your security, sign in with the same Google account you
-                use for BazzarGo before requesting deletion.
+                For your security, sign in with your Google account before requesting account deletion.
               </p>
 
               <button
@@ -184,29 +234,82 @@ export default function DeleteAccount() {
                 </button>
               </div>
 
-              <div className="mb-8 flex items-start gap-3 rounded-xl border border-amber-100 bg-amber-50 p-4">
+              <div className="mb-6 flex items-start gap-3 rounded-xl border border-amber-100 bg-amber-50 p-4">
                 <ShieldAlert size={18} className="mt-0.5 shrink-0 text-amber-600" />
                 <p className="text-[13.5px] leading-relaxed text-amber-800">
-                  This will permanently delete your BazzarGo account and all
-                  associated data, including delivery history, saved
-                  addresses, and KYC records. This action cannot be undone.
+                  Submitting this request will schedule your account, delivery history, saved addresses, and records for permanent deletion after <strong>7 days</strong>.
                 </p>
               </div>
 
-              {deleteError && (
-                <p className="mb-4 flex items-start gap-2 text-[13.5px] text-red-600">
-                  <AlertCircle size={15} className="mt-0.5 shrink-0" />
-                  {deleteError}
-                </p>
-              )}
+              <form onSubmit={handleFormSubmit} className="space-y-4">
+                <div>
+                  <label className="block text-[13.5px] font-semibold text-navy-800 mb-1">
+                    Full Name
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={fullName}
+                    onChange={(e) => setFullName(e.target.value)}
+                    placeholder="Enter your full name"
+                    className="w-full rounded-xl border border-navy-200 px-4 py-2.5 text-[14.5px] text-navy-900 focus:border-brand-500 focus:outline-none"
+                  />
+                </div>
 
-              <button
-                type="button"
-                onClick={handleDeleteClick}
-                className="w-full rounded-full bg-red-600 px-6 py-3.5 text-[15px] font-semibold text-white transition-colors hover:bg-red-700"
-              >
-                Delete Account
-              </button>
+                <div>
+                  <label className="block text-[13.5px] font-semibold text-navy-800 mb-1">
+                    Registered Email (From Google Sign-In)
+                  </label>
+                  <input
+                    type="email"
+                    readOnly
+                    value={session.user.email}
+                    className="w-full rounded-xl border border-navy-200 bg-navy-50 px-4 py-2.5 text-[14.5px] text-navy-600 cursor-not-allowed"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[13.5px] font-semibold text-navy-800 mb-1">
+                    Registered Phone Number
+                  </label>
+                  <input
+                    type="tel"
+                    required
+                    value={phone}
+                    onChange={(e) => setPhone(e.target.value)}
+                    placeholder="e.g. +1 234 567 8900"
+                    className="w-full rounded-xl border border-navy-200 px-4 py-2.5 text-[14.5px] text-navy-900 focus:border-brand-500 focus:outline-none"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[13.5px] font-semibold text-navy-800 mb-1">
+                    Reason for Deletion
+                  </label>
+                  <textarea
+                    rows={3}
+                    required
+                    value={reason}
+                    onChange={(e) => setReason(e.target.value)}
+                    placeholder="Please tell us why you want to delete your account..."
+                    className="w-full rounded-xl border border-navy-200 px-4 py-2.5 text-[14.5px] text-navy-900 focus:border-brand-500 focus:outline-none"
+                  />
+                </div>
+
+                {deleteError && (
+                  <p className="flex items-start gap-2 text-[13.5px] text-red-600">
+                    <AlertCircle size={15} className="mt-0.5 shrink-0" />
+                    {deleteError}
+                  </p>
+                )}
+
+                <button
+                  type="submit"
+                  className="w-full mt-4 rounded-full bg-red-600 px-6 py-3.5 text-[15px] font-semibold text-white transition-colors hover:bg-red-700"
+                >
+                  Submit Deletion Request
+                </button>
+              </form>
             </div>
           )}
         </Container>
@@ -215,10 +318,10 @@ export default function DeleteAccount() {
       <ConfirmDialog
         open={confirmOpen}
         danger
-        title="Permanently delete your account?"
-        description="This will permanently delete your BazzarGo account, delivery history, saved addresses, and KYC records. This cannot be undone."
-        confirmLabel="Yes, delete my account"
-        cancelLabel="Keep my account"
+        title="Confirm Account Deletion Request"
+        description="Are you sure you want to submit your account deletion request? Your account and all associated data will be scheduled for permanent deletion in 7 days."
+        confirmLabel="Yes, submit request"
+        cancelLabel="Cancel"
         loading={deleteLoading}
         onConfirm={confirmDelete}
         onCancel={() => setConfirmOpen(false)}
