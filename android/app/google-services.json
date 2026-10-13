@@ -1,0 +1,63 @@
+{
+  "project_info": {
+    "project_number": "1013832705151",
+    "project_id": "bazzargo-ce8ab",
+    "storage_bucket": "bazzargo-ce8ab.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1013832705151:android:74b095f26c5d32dc91cb4a",
+        "android_client_info": {
+          "package_name": "com.veenus.bazzargo"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "1013832705151-85dfv80v3b6mgj66s62u8sn0g0gja1gk.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.veenus.bazzargo",
+            "certificate_hash": "61d79285af383af0e7537fb1c0c0e3c3d90e62c6"
+          }
+        },
+        {
+          "client_id": "1013832705151-a5441plm2ceo54l4slls033k3ktoldvc.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.veenus.bazzargo",
+            "certificate_hash": "b9075a6031e2ec83bfbadd860544645103be650e"
+          }
+        },
+        {
+          "client_id": "1013832705151-ril8f8tq4huuqimgeg9g4tou9n56f2l5.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.veenus.bazzargo",
+            "certificate_hash": "c4e46fabf278d2efa0fa26b7dd21b866b4ac9669"
+          }
+        },
+        {
+          "client_id": "1013832705151-u9qii7a179suta269r3bn3rjfg9mmrk7.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBxMOHjMaoyPfvdZlq1BUnovrVSUqgfMX0"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "1013832705151-u9qii7a179suta269r3bn3rjfg9mmrk7.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
